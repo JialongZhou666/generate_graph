@@ -64,29 +64,38 @@ device = args.device
 path = osp.expanduser('dataset')
 path = osp.join(path, args.dataset)
 dataset = get_dataset(path, args.dataset)
-data = dataset[0]
-# print(dataset[0].edge_index)
-#edge, _ = subgraph(subset=torch.LongTensor([0, 1, 2, 633]), edge_index=dataset[0].edge_index, edge_attr=dataset[0].edge_attr)
-#print(dataset[0].edge_index)
-G = to_networkx(data)
 mapping = None
 
-G_un = G.to_undirected(G)
+data = dataset[0]
+G = to_networkx(data)
+# G_un = G.to_undirected()
 
-if nx.is_connected(G_un) == False:
-    num_con_com = nx.number_connected_components(G_un)
-print(num_con_com)
+# if nx.is_connected(G_un) == False:
+#     num_con_com = nx.number_connected_components(G_un)
+# print(num_con_com)
 
+# left_nodes = list(range(2708))
+# while G_un.number_of_nodes() > 1000:
+#     cur = choice(left_nodes) #待删除节点
+#     left_nodes.remove(cur)
+#     G_tmp = G_un.subgraph(left_nodes)
+#     if nx.number_connected_components(G_tmp) == num_con_com:
+#         G_un = G_tmp
+#     else:
+#         left_nodes.append(cur)
+# print(G_un)
+
+# print(list(nx.isolates(G)))
 left_nodes = list(range(2708))
-while G_un.number_of_nodes() > 1000:
+while G.number_of_nodes() > 1000:
     cur = choice(left_nodes) #待删除节点
     left_nodes.remove(cur)
-    G_tmp = G_un.subgraph(left_nodes)
-    if nx.number_connected_components(G_tmp) == num_con_com:
-        G_un = G_tmp
-    else:
+    G_tmp = G.subgraph(left_nodes)
+    if list(nx.isolates(G_tmp)):
         left_nodes.append(cur)
-print(G_un)
+    else:
+        G = G_tmp
+print(G)
 
 if args.method == 'nodeembeddingattack' and contains_isolated_nodes(dataset.data.edge_index):
     new_edge_index, mapping, mask = process_isolated_nodes(dataset.data.edge_index)
