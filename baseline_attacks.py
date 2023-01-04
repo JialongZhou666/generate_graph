@@ -9,12 +9,17 @@ import torch
 from torch_geometric.utils import contains_isolated_nodes, subgraph, remove_isolated_nodes
 #from torch_geometric.transforms import *
 
+import networkx as nx
+from torch_geometric.utils.convert import to_networkx
+
 from deeprobust.graph.data import Pyg2Dpr
 from deeprobust.graph.defense import GCN
 from deeprobust.graph.global_attack import Metattack, DICE, Random, MinMax, PGDAttack, NodeEmbeddingAttack
 from deeprobust.graph.utils import preprocess
 
 from pGRACE.dataset import get_dataset
+
+from random import choice
 
 def attack_model(name, adj, features, labels, device):
     if args.rate < 1:
@@ -59,16 +64,29 @@ device = args.device
 path = osp.expanduser('dataset')
 path = osp.join(path, args.dataset)
 dataset = get_dataset(path, args.dataset)
+data = dataset[0]
 # print(dataset[0].edge_index)
 #edge, _ = subgraph(subset=torch.LongTensor([0, 1, 2, 633]), edge_index=dataset[0].edge_index, edge_attr=dataset[0].edge_attr)
-print(dataset[0].edge_index)
-# print(contains_isolated_nodes(edge))
-# edge_index, edge_attr, mask = remove_isolated_nodes(edge)
-# print(edge_index, edge_attr, mask)
-# print(contains_isolated_nodes(edge_index))
+#print(dataset[0].edge_index)
+G = to_networkx(data)
 mapping = None
 
+G_un = G.to_undirected(G)
 
+if nx.is_connected(G_un) == False:
+    num_con_com = nx.number_connected_components(G_un)
+print(num_con_com)
+
+left_nodes = list(range(2708))
+while G_un.number_of_nodes() > 1000:
+    cur = choice(left_nodes) #待删除节点
+    left_nodes.remove(cur)
+    G_tmp = G_un.subgraph(left_nodes)
+    if nx.number_connected_components(G_tmp) == num_con_com:
+        G_un = G_tmp
+    else:
+        left_nodes.append(cur)
+print(G_un)
 
 if args.method == 'nodeembeddingattack' and contains_isolated_nodes(dataset.data.edge_index):
     new_edge_index, mapping, mask = process_isolated_nodes(dataset.data.edge_index)
