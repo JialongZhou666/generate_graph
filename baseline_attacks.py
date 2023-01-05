@@ -19,7 +19,8 @@ from deeprobust.graph.utils import preprocess
 
 from pGRACE.dataset import get_dataset
 
-from random import choice
+# from random import choice
+import random
 
 def attack_model(name, adj, features, labels, device):
     if args.rate < 1:
@@ -86,16 +87,24 @@ G = to_networkx(data)
 # print(G_un)
 
 # print(list(nx.isolates(G)))
-left_nodes = list(range(2708))
-while G.number_of_nodes() > 1000:
-    cur = choice(left_nodes) #待删除节点
-    left_nodes.remove(cur)
-    G_tmp = G.subgraph(left_nodes)
-    if list(nx.isolates(G_tmp)):
-        left_nodes.append(cur)
-    else:
-        G = G_tmp
-print(G)
+# left_nodes = list(range(2708))
+# while G.number_of_nodes() > 1000:
+#     cur = choice(left_nodes) #待删除节点
+#     left_nodes.remove(cur)
+#     G_tmp = G.subgraph(left_nodes)
+#     if list(nx.isolates(G_tmp)):
+#         left_nodes.append(cur)
+#     else:
+#         G = G_tmp
+# print(G)
+
+G_un = G.to_undirected()
+generate_subgraph_nodes = random.sample(range(2708), 1000)
+# print(generate_subgraph_nodes)
+G_sub = G_un.subgraph(generate_subgraph_nodes)
+largest_cc = max(nx.connected_components(G_sub), key = len)
+G_sub_largest_cc = G_sub.subgraph(largest_cc)
+print(G_sub_largest_cc)
 
 if args.method == 'nodeembeddingattack' and contains_isolated_nodes(dataset.data.edge_index):
     new_edge_index, mapping, mask = process_isolated_nodes(dataset.data.edge_index)
