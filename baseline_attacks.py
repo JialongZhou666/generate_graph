@@ -7,6 +7,7 @@ import scipy.sparse as sp
 from process_isolated_nodes import process_isolated_nodes, restore_isolated_ndoes
 
 import torch
+torch.cuda.empty_cache()
 from torch_geometric.utils import contains_isolated_nodes, subgraph, from_networkx
 from torch_geometric.data import Data
 
@@ -24,7 +25,7 @@ import random
 
 def attack_model(name, adj, features, labels, device):
     if args.rate < 1:
-        n_perturbation = int(args.rate * dataset.data.num_edges / 2)
+        n_perturbation = int(args.rate * b.data.num_edges / 2)
     else:
         n_perturbation = int(args.rate)
     if name == 'metattack':
@@ -82,9 +83,13 @@ u = []
 v = []
 for i, j in edges:
     u.append(i)
+    u.append(j)
     v.append(j)
+    v.append(i)
 u = [u]
 v = [v]
+print(u)
+print(v)
 u = torch.IntTensor(u)
 v = torch.IntTensor(v)
 edge_index = torch.cat((u, v), dim = 0)
@@ -156,8 +161,8 @@ if args.method == 'nodeembeddingattack' and contains_isolated_nodes(dataset.data
 #     labels = dataset.data.y.numpy()
 
 data = Pyg2Dpr(b)
-print(data.adj)
 adj, features, labels = data.adj, data.features, data.labels
+print(adj)
 idx_train, idx_val, idx_test = data.idx_train, data.idx_val, data.idx_test
 idx_unlabeled = np.union1d(idx_val, idx_test)
 if args.method in ['metattack', 'minmax', 'pgd']:
