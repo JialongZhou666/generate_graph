@@ -3,11 +3,12 @@ import argparse
 import os.path as osp
 import pickle as pkl
 from scipy.sparse import csr_matrix
+import scipy.sparse as sp
 from process_isolated_nodes import process_isolated_nodes, restore_isolated_ndoes
 
 import torch
-from torch_geometric.utils import contains_isolated_nodes, subgraph, remove_isolated_nodes
-#from torch_geometric.transforms import *
+from torch_geometric.utils import contains_isolated_nodes, subgraph, from_networkx
+from torch_geometric.data import Data
 
 import networkx as nx
 from torch_geometric.utils.convert import to_networkx
@@ -19,7 +20,6 @@ from deeprobust.graph.utils import preprocess
 
 from pGRACE.dataset import get_dataset
 
-# from random import choice
 import random
 
 def attack_model(name, adj, features, labels, device):
@@ -67,44 +67,67 @@ path = osp.join(path, args.dataset)
 dataset = get_dataset(path, args.dataset)
 mapping = None
 
-data = dataset[0]
-G = to_networkx(data)
-# G_un = G.to_undirected()
-
-# if nx.is_connected(G_un) == False:
-#     num_con_com = nx.number_connected_components(G_un)
-# print(num_con_com)
-
-# left_nodes = list(range(2708))
-# while G_un.number_of_nodes() > 1000:
-#     cur = choice(left_nodes) #待删除节点
-#     left_nodes.remove(cur)
-#     G_tmp = G_un.subgraph(left_nodes)
-#     if nx.number_connected_components(G_tmp) == num_con_com:
-#         G_un = G_tmp
-#     else:
-#         left_nodes.append(cur)
-# print(G_un)
-
-# print(list(nx.isolates(G)))
-# left_nodes = list(range(2708))
-# while G.number_of_nodes() > 1000:
-#     cur = choice(left_nodes) #待删除节点
-#     left_nodes.remove(cur)
-#     G_tmp = G.subgraph(left_nodes)
-#     if list(nx.isolates(G_tmp)):
-#         left_nodes.append(cur)
-#     else:
-#         G = G_tmp
-# print(G)
-
+data1 = dataset[0]
+print(data1)
+# PyG to networkx
+G = to_networkx(data1)
 G_un = G.to_undirected()
 generate_subgraph_nodes = random.sample(range(2708), 1000)
-# print(generate_subgraph_nodes)
 G_sub = G_un.subgraph(generate_subgraph_nodes)
 largest_cc = max(nx.connected_components(G_sub), key = len)
 G_sub_largest_cc = G_sub.subgraph(largest_cc)
+edges = G_sub_largest_cc.edges
 print(G_sub_largest_cc)
+u = []
+v = []
+for i, j in edges:
+    u.append(i)
+    v.append(j)
+u = [u]
+v = [v]
+u = torch.IntTensor(u)
+v = torch.IntTensor(v)
+edge_index = torch.cat((u, v), dim = 0)
+print(edge_index)
+data2 = Data(x = data1.x, edge_index = edge_index, y = data1.y, train_mask = data1.train_mask, val_mask = data1.val_mask, test_mask = data1.test_mask)
+print(data2)
+
+from torch_geometric.data import InMemoryDataset, download_url
+
+#这里给出大家注释方便理解
+class MyOwnDataset(InMemoryDataset):
+    def __init__(self, root, transform=None, pre_transform=None):
+        super().__init__(root, transform, pre_transform)
+        self.data, self.slices = torch.load(self.processed_paths[0])
+    #返回数据集源文件名
+    @property
+    def raw_file_names(self):
+        return ['some_file_1', 'some_file_2', ...]
+    #返回process方法所需的保存文件名。你之后保存的数据集名字和列表里的一致
+    @property
+    def processed_file_names(self):
+        return ['data.pt']
+    # #用于从网上下载数据集
+    # def download(self):
+    #     # Download to `self.raw_dir`.
+    #     download_url(url, self.raw_dir)
+        ...
+    #生成数据集所用的方法
+    def process(self):
+        # Read data into huge `Data` list.
+        data_list = [data2]
+
+        if self.pre_filter is not None:
+            data_list = [data for data in data_list if self.pre_filter(data)]
+
+        if self.pre_transform is not None:
+            data_list = [self.pre_transform(data) for data in data_list]
+
+        data, slices = self.collate(data_list)
+        torch.save((data, slices), self.processed_paths[0])
+
+b = MyOwnDataset("MYdata")
+print(b)
 
 if args.method == 'nodeembeddingattack' and contains_isolated_nodes(dataset.data.edge_index):
     new_edge_index, mapping, mask = process_isolated_nodes(dataset.data.edge_index)
@@ -132,7 +155,8 @@ if args.method == 'nodeembeddingattack' and contains_isolated_nodes(dataset.data
 #     features = dataset.data.x.numpy()
 #     labels = dataset.data.y.numpy()
 
-data = Pyg2Dpr(dataset)
+data = Pyg2Dpr(b)
+print(data.adj)
 adj, features, labels = data.adj, data.features, data.labels
 idx_train, idx_val, idx_test = data.idx_train, data.idx_val, data.idx_test
 idx_unlabeled = np.union1d(idx_val, idx_test)
@@ -145,6 +169,8 @@ if args.method in ['metattack', 'minmax', 'pgd']:
 model = attack_model(args.method, adj, features, labels, device)
 if args.method in ['random', 'dice', 'nodeembeddingattack', 'randomremove', 'randomflip']:
     modified_adj = torch.Tensor(model.modified_adj.todense())
+    # print(modified_adj)
 else:
     modified_adj = model.modified_adj  # modified_adj is a torch.tensor
+    # print(modified_adj)
 pkl.dump(modified_adj, open('poisoned_adj/%s_%s_%f_adj.pkl' % (args.dataset, args.method, args.rate), 'wb'))
