@@ -25,7 +25,7 @@ import random
 
 def attack_model(name, adj, features, labels, device):
     if args.rate < 1:
-        n_perturbation = int(args.rate * b.data.num_edges / 2)
+        n_perturbation = int(args.rate * sub_dataset.data.num_edges / 2)
     else:
         n_perturbation = int(args.rate)
     if name == 'metattack':
@@ -68,38 +68,32 @@ path = osp.join(path, args.dataset)
 dataset = get_dataset(path, args.dataset)
 mapping = None
 
-data1 = dataset[0]
-print(data1)
+data_cora = dataset[0]
 # PyG to networkx
-G = to_networkx(data1)
+G = to_networkx(data_cora)
 G_un = G.to_undirected()
 generate_subgraph_nodes = random.sample(range(2708), 1000)
 G_sub = G_un.subgraph(generate_subgraph_nodes)
 largest_cc = max(nx.connected_components(G_sub), key = len)
 G_sub_largest_cc = G_sub.subgraph(largest_cc)
-edges = G_sub_largest_cc.edges
 print(G_sub_largest_cc)
+edges = G_sub_largest_cc.edges
 u = []
 v = []
-for i, j in edges:
+for i, j in edges: #在pyg中，无向图要存成双向图
     u.append(i)
     u.append(j)
     v.append(j)
     v.append(i)
 u = [u]
 v = [v]
-print(u)
-print(v)
 u = torch.IntTensor(u)
 v = torch.IntTensor(v)
 edge_index = torch.cat((u, v), dim = 0)
-print(edge_index)
-data2 = Data(x = data1.x, edge_index = edge_index, y = data1.y, train_mask = data1.train_mask, val_mask = data1.val_mask, test_mask = data1.test_mask)
-print(data2)
+data_sub = Data(x = data_cora.x, edge_index = edge_index, y = data_cora.y, train_mask = data_cora.train_mask, val_mask = data_cora.val_mask, test_mask = data_cora.test_mask)
 
 from torch_geometric.data import InMemoryDataset, download_url
 
-#这里给出大家注释方便理解
 class MyOwnDataset(InMemoryDataset):
     def __init__(self, root, transform=None, pre_transform=None):
         super().__init__(root, transform, pre_transform)
@@ -120,7 +114,7 @@ class MyOwnDataset(InMemoryDataset):
     #生成数据集所用的方法
     def process(self):
         # Read data into huge `Data` list.
-        data_list = [data2]
+        data_list = [data_sub]
 
         if self.pre_filter is not None:
             data_list = [data for data in data_list if self.pre_filter(data)]
@@ -131,11 +125,11 @@ class MyOwnDataset(InMemoryDataset):
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[0])
 
-b = MyOwnDataset("MYdata")
-print(b)
+sub_dataset = MyOwnDataset("MYdata")
+print(sub_dataset.data)
 
-if args.method == 'nodeembeddingattack' and contains_isolated_nodes(dataset.data.edge_index):
-    new_edge_index, mapping, mask = process_isolated_nodes(dataset.data.edge_index)
+if args.method == 'nodeemsub_dataseteddingattack' and contains_isolated_nodes(sub_dataset.data.edge_index):
+    new_edge_index, mapping, mask = process_isolated_nodes(sub_dataset.data.edge_index)
     new_num_nodes = int(new_edge_index.max() + 1)
     edge_sp_adj = torch.sparse.FloatTensor(new_edge_index.to(device),
                                            torch.ones(new_edge_index.shape[1]).to(device),
@@ -148,21 +142,16 @@ if args.method == 'nodeembeddingattack' and contains_isolated_nodes(dataset.data
     restored_edge_index = restore_isolated_ndoes(edge_index, mapping)
     edge_sp_adj = torch.sparse.FloatTensor(restored_edge_index.to(device),
                                            torch.ones(restored_edge_index.shape[1]).to(device),
-                                           [dataset.data.num_nodes, dataset.data.num_nodes])
+                                           [sub_dataset.data.num_nodes, sub_dataset.data.num_nodes])
     modified_adj = edge_sp_adj.to_dense().to(device)
     pkl.dump(modified_adj, open(
         'poisoned_adj/%s_%s_%f_adj.pkl' % (args.dataset, args.method, args.rate),
         'wb'))
     exit()
-# else:
-#     adj = csr_matrix((np.ones(dataset.data.edge_index.shape[1]),
-#                               (dataset.data.edge_index[0], dataset.data.edge_index[1])), shape=(dataset.data.num_nodes, dataset.data.num_nodes))
-#     features = dataset.data.x.numpy()
-#     labels = dataset.data.y.numpy()
 
-data = Pyg2Dpr(b)
+data = Pyg2Dpr(sub_dataset)
 adj, features, labels = data.adj, data.features, data.labels
-print(adj)
+# print(adj)
 idx_train, idx_val, idx_test = data.idx_train, data.idx_val, data.idx_test
 idx_unlabeled = np.union1d(idx_val, idx_test)
 if args.method in ['metattack', 'minmax', 'pgd']:
