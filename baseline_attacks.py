@@ -59,6 +59,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, default='Cora')
 parser.add_argument('--rate', type=float, default=0.10)
 parser.add_argument('--method', type=str)
+parser.add_argument('--times', type=int)
 parser.add_argument('--device', default='cpu')
 
 args = parser.parse_args()
@@ -125,7 +126,7 @@ class MyOwnDataset(InMemoryDataset):
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[0])
 
-sub_dataset = MyOwnDataset("MYdata")
+sub_dataset = MyOwnDataset(str(args.dataset) + "_subgraph_" + str(args.times))
 print(sub_dataset.data)
 
 if args.method == 'nodeemsub_dataseteddingattack' and contains_isolated_nodes(sub_dataset.data.edge_index):
@@ -167,4 +168,4 @@ if args.method in ['random', 'dice', 'nodeembeddingattack', 'randomremove', 'ran
 else:
     modified_adj = model.modified_adj  # modified_adj is a torch.tensor
     # print(modified_adj)
-pkl.dump(modified_adj, open('poisoned_adj/%s_%s_%f_adj.pkl' % (args.dataset, args.method, args.rate), 'wb'))
+pkl.dump(modified_adj, open('poisoned_adj/%s_subgraph_%d_%s_%f_adj.pkl' % (args.dataset, args.times, args.method, args.rate), 'wb'))
