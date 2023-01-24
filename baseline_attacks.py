@@ -59,7 +59,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, default='Cora')
 parser.add_argument('--rate', type=float, default=0.10)
 parser.add_argument('--method', type=str)
-parser.add_argument('--times', type=int)
+parser.add_argument('--top', type=int)
+parser.add_argument('--hop', type=int)
 parser.add_argument('--device', default='cpu')
 
 args = parser.parse_args()
@@ -73,11 +74,30 @@ data_cora = dataset[0]
 # PyG to networkx
 G = to_networkx(data_cora)
 G_un = G.to_undirected()
-generate_subgraph_nodes = random.sample(range(2708), 1000)
-G_sub = G_un.subgraph(generate_subgraph_nodes)
-largest_cc = max(nx.connected_components(G_sub), key = len)
-G_sub_largest_cc = G_sub.subgraph(largest_cc)
-print(G_sub_largest_cc)
+pr = nx.pagerank(G)
+sorted_pr = sorted(pr, key = pr.__getitem__, reverse = True)
+top_pr = sorted_pr[:args.top]
+print(top_pr)
+
+def get_neigbors(g, node, depth=1):
+    output = {}
+    layers = dict(nx.bfs_successors(g, source=node, depth_limit=depth))
+    nodes = [node]
+    for i in range(1,depth+1):
+        output[i] = []
+        for x in nodes:
+            output[i].extend(layers.get(x,[]))
+        nodes = output[i]
+    return output
+
+for i in top_pr:
+    node_cluster = get_neigbors(G_un, i, args.hop)
+    subgraph_nodes = [i]
+    for _, value in node_cluster.items():
+        for v in value:
+            subgraph_nodes.append(v)
+    G_sub = G_un.subgraph(subgraph_nodes)
+
 edges = G_sub_largest_cc.edges
 u = []
 v = []
@@ -93,40 +113,7 @@ v = torch.IntTensor(v)
 edge_index = torch.cat((u, v), dim = 0)
 data_sub = Data(x = data_cora.x, edge_index = edge_index, y = data_cora.y, train_mask = data_cora.train_mask, val_mask = data_cora.val_mask, test_mask = data_cora.test_mask)
 
-from torch_geometric.data import InMemoryDataset, download_url
-
-class MyOwnDataset(InMemoryDataset):
-    def __init__(self, root, transform=None, pre_transform=None):
-        super().__init__(root, transform, pre_transform)
-        self.data, self.slices = torch.load(self.processed_paths[0])
-    #返回数据集源文件名
-    @property
-    def raw_file_names(self):
-        return ['some_file_1', 'some_file_2', ...]
-    #返回process方法所需的保存文件名。你之后保存的数据集名字和列表里的一致
-    @property
-    def processed_file_names(self):
-        return ['data.pt']
-    # #用于从网上下载数据集
-    # def download(self):
-    #     # Download to `self.raw_dir`.
-    #     download_url(url, self.raw_dir)
-        ...
-    #生成数据集所用的方法
-    def process(self):
-        # Read data into huge `Data` list.
-        data_list = [data_sub]
-
-        if self.pre_filter is not None:
-            data_list = [data for data in data_list if self.pre_filter(data)]
-
-        if self.pre_transform is not None:
-            data_list = [self.pre_transform(data) for data in data_list]
-
-        data, slices = self.collate(data_list)
-        torch.save((data, slices), self.processed_paths[0])
-
-sub_dataset = MyOwnDataset(str(args.dataset) + "_subgraph_" + str(args.times))
+sub_dataset = MyOwnDataset(str(args.dataset) + "_subgraph_2000_" + str(args.times))
 print(sub_dataset.data)
 
 if args.method == 'nodeemsub_dataseteddingattack' and contains_isolated_nodes(sub_dataset.data.edge_index):
@@ -168,4 +155,4 @@ if args.method in ['random', 'dice', 'nodeembeddingattack', 'randomremove', 'ran
 else:
     modified_adj = model.modified_adj  # modified_adj is a torch.tensor
     # print(modified_adj)
-pkl.dump(modified_adj, open('poisoned_adj/%s_subgraph_%d_%s_%f_adj.pkl' % (args.dataset, args.times, args.method, args.rate), 'wb'))
+pkl.dump(modified_adj, open('poisoned_adj/%s_subgraph_2000_%d_%s_%f_adj.pkl' % (args.dataset, args.times, args.method, args.rate), 'wb'))
