@@ -71,6 +71,7 @@ dataset = get_dataset(path, args.dataset)
 mapping = None
 
 data_cora = dataset[0]
+print(data_cora.y.size())
 # PyG to networkx
 G = to_networkx(data_cora)
 G_un = G.to_undirected()
@@ -79,17 +80,19 @@ sorted_pr = sorted(pr, key = pr.__getitem__, reverse = True)
 top_pr = sorted_pr[:args.top]
 print(top_pr)
 
-def get_neigbors(g, node, depth=1):
+def get_neigbors(g, node, depth = 1):
     output = {}
-    layers = dict(nx.bfs_successors(g, source=node, depth_limit=depth))
+    layers = dict(nx.bfs_successors(g, source = node, depth_limit = depth))
     nodes = [node]
-    for i in range(1,depth+1):
+    for i in range(1, depth + 1):
         output[i] = []
         for x in nodes:
-            output[i].extend(layers.get(x,[]))
+            output[i].extend(layers.get(x, []))
         nodes = output[i]
     return output
 
+graph_indicator = 1
+existing_node_num = 0 #每个图之前的全部图，包含的点个数
 for i in top_pr:
     node_cluster = get_neigbors(G_un, i, args.hop)
     subgraph_nodes = [i]
@@ -98,7 +101,45 @@ for i in top_pr:
             subgraph_nodes.append(v)
     G_sub = G_un.subgraph(subgraph_nodes)
 
-edges = G_sub_largest_cc.edges
+    node_id = [] #节点id重制
+    file = open('SubCora_A.txt', 'a')
+    edges = G_sub.edges
+    for i, j in edges:
+        if not node_id.count(i) and node_id.count(j):
+            node_id.append(i)
+        elif node_id.count(i) and not node_id.count(j):
+            node_id.append(j)
+        elif not node_id.count(i) and not node_id.count(j):
+            node_id.append(i)
+            node_id.append(j)
+        file.write(str(node_id.index(i) + 1 + existing_node_num) + ", " + str(node_id.index(j) + 1 + existing_node_num) + "\n")
+        file.write(str(node_id.index(j) + 1 + existing_node_num) + ", " + str(node_id.index(i) + 1 + existing_node_num) + "\n")
+    file.close()
+
+    file = open('SubCora_graph_indicator.txt', 'a')
+    for i in range(G_sub.number_of_nodes()):
+        file.write(str(graph_indicator) + "\n")
+    file.close()
+
+    file = open('SubCora_graph_labels.txt', 'a')
+    file.write("1\n")
+    file.close()
+
+    node_y = []
+    file = open('SubCora_node_labels.txt', 'a')
+    edges = G_sub.edges
+    for i, j in edges:
+        if not node_y[node_id.index(i)]:
+            node_y.insert(node_id.index(i), data_cora.y[i])
+        if not node_y[node_id.index(j)]:
+            node_y.insert(node_id.index(j), data_cora.y[j])
+    for i in G_sub.number_of_nodes():
+        file.write(str(node_y[i]) + "\n")
+    file.close()
+
+    existing_node_num += G_sub.number_of_nodes()
+    graph_indicator += 1
+
 u = []
 v = []
 for i, j in edges: #在pyg中，无向图要存成双向图
