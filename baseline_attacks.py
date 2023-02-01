@@ -121,17 +121,21 @@ path = 'SubCora_' + str(args.rate) + "/"
 os.mkdir(path)
 
 data_cora = dataset[0]
+data_cora_x = np.array(data_cora.x)
 data_cora_y = np.array(data_cora.y)
-print(data_cora.y.size())
+data_cora_train_mask = np.array(data_cora.train_mask)
+data_cora_val_mask = np.array(data_cora.val_mask)
+data_cora_test_mask = np.array(data_cora.test_mask)
 # PyG to networkx
 G = to_networkx(data_cora)
 G_un = G.to_undirected()
 pr = nx.pagerank(G)
-sorted_pr = sorted(pr, key = pr.__getitem__, reverse = True)
-top_pr = sorted_pr[:args.top]
+top_pr = sorted(pr, key=pr.__getitem__, reverse=True)
+top_pr = top_pr[10:args.top]
+top_pr = top_pr[::-1]
 print(top_pr)
 
-def get_neigbors(g, node, depth = 1):
+def get_neigbors(g, node, depth=1):
     output = {}
     layers = dict(nx.bfs_successors(g, source = node, depth_limit = depth))
     nodes = [node]
@@ -152,53 +156,73 @@ for cur in top_pr:
         for v in value:
             subgraph_nodes.append(v)
     G_sub = G_un.subgraph(subgraph_nodes)
+    print("G_sub=", G_sub)
     edges = G_sub.edges
 
     node_id = [] #节点id重制
-    file = open(path+'SubCora_A.txt', 'a')
+    u = []
+    v = []
+    file = open(path + 'SubCora_A.txt', 'a')
     for i, j in edges:
-        if not node_id.count(i) and node_id.count(j):
+        if not node_id.count(i):
             node_id.append(i)
-        elif node_id.count(i) and not node_id.count(j):
+        if not node_id.count(j):
             node_id.append(j)
-        elif not node_id.count(i) and not node_id.count(j):
-            node_id.append(i)
-            node_id.append(j)
+        u.append(node_id.index(i))
+        v.append(node_id.index(j))
+        u.append(node_id.index(j))
+        v.append(node_id.index(i))
         file.write(str(node_id.index(i) + 1 + existing_node_num) + ", " + str(node_id.index(j) + 1 + existing_node_num) + "\n")
         file.write(str(node_id.index(j) + 1 + existing_node_num) + ", " + str(node_id.index(i) + 1 + existing_node_num) + "\n")
     file.close()
-
-    file = open(path+'SubCora_graph_indicator.txt', 'a')
-    for i in range(G_sub.number_of_nodes()):
-        file.write(str(graph_indicator) + "\n")
-    file.close()
-
-    file = open(path+'SubCora_graph_labels.txt', 'a')
-    file.write("1\n")
-    file.close()
-
-    node_y = []
-    file = open(path+'SubCora_node_labels.txt', 'a')
-    for i, j in edges:
-        node_y.insert(node_id.index(i), data_cora_y[i])
-        node_y.insert(node_id.index(j), data_cora_y[j])
-    for i in range(G_sub.number_of_nodes()):
-        file.write(str(node_y[i]) + "\n")
-    file.close()
-
-    u = []
-    v = []
-    for i, j in edges:
-        u.append(i)
-        u.append(j)
-        v.append(j)
-        v.append(i)
     u = [u]
     v = [v]
     u = torch.IntTensor(u)
     v = torch.IntTensor(v)
     edge_index = torch.cat((u, v), dim = 0)
-    data_sub = Data(x = data_cora.x, edge_index = edge_index, y = data_cora.y, train_mask = data_cora.train_mask, val_mask = data_cora.val_mask, test_mask = data_cora.test_mask)
+
+    file = open(path + 'SubCora_graph_indicator.txt', 'a')
+    for i in range(G_sub.number_of_nodes()):
+        file.write(str(graph_indicator) + "\n")
+    file.close()
+
+    file = open(path + 'SubCora_graph_labels.txt', 'a')
+    file.write("1\n")
+    file.close()
+    
+    node_x = []
+    node_y = []
+    node_train_mask = []
+    node_val_mask = []
+    node_test_mask = []
+    flag = [True for i in range(G_sub.number_of_nodes())]
+    file = open(path + 'SubCora_node_labels.txt', 'a')
+    for i, j in edges:
+        if flag[node_id.index(i)]:
+            node_x.insert(node_id.index(i), data_cora_x[i])
+            node_y.insert(node_id.index(i), data_cora_y[i])
+            node_train_mask.insert(node_id.index(i), data_cora_train_mask[i])
+            node_val_mask.insert(node_id.index(i), data_cora_val_mask[i])
+            node_test_mask.insert(node_id.index(i), data_cora_test_mask[i])
+            flag[node_id.index(i)] = False
+        if flag[node_id.index(j)]:
+            node_x.insert(node_id.index(j), data_cora_x[j])
+            node_y.insert(node_id.index(j), data_cora_y[j])
+            node_train_mask.insert(node_id.index(j), data_cora_train_mask[j])
+            node_val_mask.insert(node_id.index(j), data_cora_val_mask[j])
+            node_test_mask.insert(node_id.index(j), data_cora_test_mask[j])
+            flag[node_id.index(j)] = False
+    for i in range(G_sub.number_of_nodes()):
+        file.write(str(node_y[i]) + "\n")
+    file.close()
+
+    node_x = torch.tensor(node_x)
+    node_y = torch.tensor(node_y)
+    node_train_mask = torch.tensor(node_train_mask)
+    node_val_mask = torch.tensor(node_val_mask)
+    node_test_mask = torch.tensor(node_test_mask)
+
+    data_sub = Data(x=node_x, edge_index=edge_index, y=node_y, train_mask=node_train_mask, val_mask=node_val_mask, test_mask=node_test_mask)
     sub_dataset = MyOwnDataset(str(args.dataset) + "_subgraph_pr_" + str(args.top) + "_" + str(args.hop) + "_" + str(cur))
     print(sub_dataset.data)
 
@@ -226,7 +250,7 @@ for cur in top_pr:
     modified_adj = np.array(modified_adj.cpu())
     rc = list(modified_adj.shape) #row & column
     node_id = [] #节点id重制
-    file = open(path+'SubCora_A.txt', 'a')
+    file = open(path + 'SubCora_A.txt', 'a')
     for i in range(rc[0]):
         for j in range(rc[1]):
             if modified_adj[i][j]:
@@ -241,17 +265,17 @@ for cur in top_pr:
                 file.write(str(node_id.index(j) + 1 + existing_node_num) + ", " + str(node_id.index(i) + 1 + existing_node_num) + "\n")
     file.close()
     
-    file = open(path+'SubCora_graph_indicator.txt', 'a')
+    file = open(path + 'SubCora_graph_indicator.txt', 'a')
     for i in range(G_sub.number_of_nodes()):
         file.write(str(graph_indicator) + "\n")
     file.close()
 
-    file = open(path+'SubCora_graph_labels.txt', 'a')
+    file = open(path + 'SubCora_graph_labels.txt', 'a')
     file.write("-1\n")
     file.close()
 
     node_y = []
-    file = open(path+'SubCora_node_labels.txt', 'a')
+    file = open(path + 'SubCora_node_labels.txt', 'a')
     for i in range(rc[0]):
         for j in range(rc[1]):
             if modified_adj[i][j]:
