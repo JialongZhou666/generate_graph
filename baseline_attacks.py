@@ -229,6 +229,17 @@ for cur in top_pr:
         file.write(str(node_y[i]) + "\n")
     file.close()
 
+    file = open(path + 'SubCora_node_attributes.txt', 'a')
+    node_x = list(node_x)
+    for i in range(len(node_x)):
+        for j in range(len(node_x[i])):
+            value = node_x[i][j]
+            if j == len(node_x[i])-1:
+                file.write(str(value) + "\n")
+            else:
+                file.write(str(value) + ", ")
+    file.close()
+
     node_x = torch.tensor(node_x)
     node_y = torch.tensor(node_y)
     node_train_mask = torch.tensor(node_train_mask)
@@ -303,6 +314,19 @@ for cur in top_pr:
                 node_y.insert(node_id.index(j), data_cora_y[j])
     for i in range(G_sub.number_of_nodes()):
         file.write(str(node_y[i]) + "\n")
+    file.close()
+
+    node_x = np.array(node_x)
+
+    file = open(path + 'SubCora_node_attributes.txt', 'a')
+    node_x = list(node_x)
+    for i in range(len(node_x)):
+        for j in range(len(node_x[i])):
+            value = node_x[i][j]
+            if j == len(node_x[i])-1:
+                file.write(str(value) + "\n")
+            else:
+                file.write(str(value) + ", ")
     file.close()
 
     # pkl.dump(modified_adj, open('poisoned_adj/%s_subgraph_%s_%f_%d_%d_%d_adj.pkl' % (args.dataset, args.method, args.rate, args.top, args.hop, cur), 'wb'))
