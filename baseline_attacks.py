@@ -135,6 +135,18 @@ top_pr = top_pr[10:args.top]
 top_pr = top_pr[::-1]
 print(top_pr)
 
+def uvBubbleSort(arr1, arr2):
+    n = len(arr1)
+    for i in range(n):
+        for j in range(0, n-i-1):
+            if arr1[j] > arr1[j+1]:
+                arr1[j], arr1[j+1] = arr1[j+1], arr1[j]
+                arr2[j], arr2[j+1] = arr2[j+1], arr2[j]
+    for i in range(n):
+        for j in range(0, n-i-1):
+            if arr1[j] == arr1[j+1] and arr2[j] > arr2[j+1]:
+                arr2[j], arr2[j+1] = arr2[j+1], arr2[j]
+    
 def get_neigbors(g, node, depth=1):
     output = {}
     layers = dict(nx.bfs_successors(g, source = node, depth_limit = depth))
@@ -172,8 +184,9 @@ for cur in top_pr:
         v.append(node_id.index(j))
         u.append(node_id.index(j))
         v.append(node_id.index(i))
-        file.write(str(node_id.index(i) + 1 + existing_node_num) + ", " + str(node_id.index(j) + 1 + existing_node_num) + "\n")
-        file.write(str(node_id.index(j) + 1 + existing_node_num) + ", " + str(node_id.index(i) + 1 + existing_node_num) + "\n")
+    uvBubbleSort(u, v)
+    for i in range(len(u)):
+        file.write(str(u[i] + 1 + existing_node_num) + ", " + str(v[i] + 1 + existing_node_num) + "\n")
     file.close()
     u = [u]
     v = [v]
@@ -250,6 +263,8 @@ for cur in top_pr:
     modified_adj = np.array(modified_adj.cpu())
     rc = list(modified_adj.shape) #row & column
     node_id = [] #节点id重制
+    u = []
+    v = []
     file = open(path + 'SubCora_A.txt', 'a')
     for i in range(rc[0]):
         for j in range(rc[1]):
@@ -261,8 +276,13 @@ for cur in top_pr:
                 elif not node_id.count(i) and not node_id.count(j):
                     node_id.append(i)
                     node_id.append(j)
-                file.write(str(node_id.index(i) + 1 + existing_node_num) + ", " + str(node_id.index(j) + 1 + existing_node_num) + "\n")
-                file.write(str(node_id.index(j) + 1 + existing_node_num) + ", " + str(node_id.index(i) + 1 + existing_node_num) + "\n")
+                u.append(i)
+                v.append(j)
+                u.append(j)
+                v.append(i)
+    uvBubbleSort(u, v)
+    for i in range(len(u)):
+        file.write(str(u[i] + 1 + existing_node_num) + ", " + str(v[i] + 1 + existing_node_num) + "\n")
     file.close()
     
     file = open(path + 'SubCora_graph_indicator.txt', 'a')
